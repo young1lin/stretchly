@@ -1,0 +1,45 @@
+name: Build Windows Floating Timer
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - trunk
+    paths:
+      - 'app/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/windows-floating-timer-build.yml'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build Windows artifacts
+        run: npx electron-builder --win nsis portable 7z --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: stretchly-windows-floating-timer
+          path: |
+            dist/*.exe
+            dist/*.7z
