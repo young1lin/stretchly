@@ -4,7 +4,7 @@ import { join } from 'path'
 import DndManager from '../app/utils/dndManager'
 import Store from 'electron-store'
 import defaultSettings from '../app/utils/defaultSettings'
-import { unlink } from 'node:fs'
+import { unlinkSync } from 'node:fs'
 
 const timeout = process.env.CI ? 30000 : 10000
 
@@ -90,7 +90,7 @@ describe('dndManager', function () {
     dndManager = null
 
     if (settings) {
-      unlink(join(__dirname, '/test-settings-dndManager.json'), (_) => {})
+      try { unlinkSync(join(__dirname, '/test-settings-dndManager.json')) } catch (_) {}
       settings = null
     }
   })

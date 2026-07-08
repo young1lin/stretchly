@@ -3,7 +3,7 @@ import { join } from 'path'
 import NaturalBreaksManager from '../app/utils/naturalBreaksManager'
 import Store from 'electron-store'
 import defaultSettings from '../app/utils/defaultSettings'
-import { unlink } from 'node:fs'
+import { unlinkSync } from 'node:fs'
 
 describe('naturalBreaksManager', function () {
   let settings = null
@@ -73,7 +73,7 @@ describe('naturalBreaksManager', function () {
     naturalBreaksManager = null
 
     if (settings) {
-      unlink(join(__dirname, '/test-settings-naturalBreaksManager.json'), (_) => {})
+      try { unlinkSync(join(__dirname, '/test-settings-naturalBreaksManager.json')) } catch (_) {}
       settings = null
     }
   })
