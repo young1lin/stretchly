@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Stretchly Floating Timer</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: transparent;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        user-select: none;
+      }
+
+      .floating-timer {
+        width: 100%;
+        height: 100%;
+        padding: 9px 12px 10px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 14px;
+        background: rgba(21, 26, 31, 0.88);
+        color: #f8fafc;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.30);
+        -webkit-app-region: drag;
+      }
+
+      .floating-timer[data-phase="breaking"] {
+        background: rgba(71, 132, 132, 0.91);
+      }
+
+      .floating-timer[data-phase="paused"] {
+        background: rgba(80, 84, 92, 0.90);
+      }
+
+      .floating-timer__top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .floating-timer__label {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        opacity: 0.92;
+      }
+
+      .floating-timer__hide {
+        width: 18px;
+        height: 18px;
+        border: 0;
+        border-radius: 9px;
+        padding: 0;
+        line-height: 18px;
+        color: rgba(255, 255, 255, 0.78);
+        background: rgba(255, 255, 255, 0.11);
+        cursor: pointer;
+        -webkit-app-region: no-drag;
+      }
+
+      .floating-timer__hide:hover {
+        color: white;
+        background: rgba(255, 255, 255, 0.20);
+      }
+
+      .floating-timer__time {
+        margin-top: 3px;
+        font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+        font-size: 25px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+
+      .floating-timer__hint {
+        margin-top: 0;
+        font-size: 10px;
+        line-height: 1;
+        opacity: 0.62;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="floating-timer" data-phase="waiting">
+      <div class="floating-timer__top">
+        <div class="floating-timer__label">Mini break</div>
+        <button class="floating-timer__hide" title="Hide floating timer">×</button>
+      </div>
+      <div class="floating-timer__time">--:--</div>
+      <div class="floating-timer__hint">Next break in</div>
+    </main>
+    <script src="./floating-timer-renderer.js"></script>
+  </body>
+</html>
