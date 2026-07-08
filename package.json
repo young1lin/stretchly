@@ -2,7 +2,7 @@
   "name": "Stretchly",
   "version": "1.21.0",
   "description": "The break time reminder app",
-  "main": "app/main.js",
+  "main": "app/floating-main.js",
   "type": "module",
   "scripts": {
     "start": "electron .",
