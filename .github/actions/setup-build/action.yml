@@ -24,6 +24,7 @@ runs:
       run: pip install setuptools
       shell: bash
     - name: Update npm
+      if: runner.os != 'Windows'
       run: npm install -g npm
       shell: bash
     - name: Install dependencies
