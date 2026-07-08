@@ -2,7 +2,7 @@ import { app, BrowserWindow, Menu, ipcMain, screen } from 'electron'
 import Store from 'electron-store'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
-import StatusMessages from './utils/statusMessages.js'
+import BreaksPlanner from './breaksPlanner.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -10,13 +10,7 @@ const __dirname = dirname(__filename)
 let floatingStore = null
 let floatingTimerWin = null
 let publishInterval = null
-
-const latestStatus = {
-  phase: 'waiting',
-  label: 'Mini break',
-  remaining: null,
-  capturedAt: Date.now()
-}
+let capturedBreakPlanner = null
 
 function getFloatingStore () {
   if (!floatingStore) {
@@ -40,49 +34,46 @@ function setFloatingTimerVisible (visible) {
   } else {
     destroyFloatingTimerWindow()
   }
+  publishFloatingTimerData()
 }
 
 function toggleFloatingTimer () {
   setFloatingTimerVisible(!isFloatingTimerVisible())
 }
 
-function patchStatusMessages () {
-  const descriptor = Object.getOwnPropertyDescriptor(StatusMessages.prototype, 'trayMessage')
-  if (!descriptor || !descriptor.get) {
-    return
+function captureBreakPlanner (planner) {
+  if (planner) {
+    capturedBreakPlanner = planner
   }
-
-  Object.defineProperty(StatusMessages.prototype, 'trayMessage', {
-    configurable: true,
-    get () {
-      captureFloatingTimerState(this)
-      return descriptor.get.call(this)
-    }
-  })
 }
 
-function captureFloatingTimerState (status) {
-  const isBreakRunning = status.reference === 'finishMicrobreak' || status.reference === 'finishBreak'
-  const isPaused = status.isPaused || status.doNotDisturb || status.appExclusionPause
+function patchBreaksPlanner () {
+  const methods = [
+    'nextBreak',
+    'clear',
+    'correctScheduler',
+    'pause',
+    'resume',
+    'reset',
+    'skipToMicrobreak',
+    'skipToBreak',
+    'postponeCurrentBreak',
+    'nextBreakAfterNotification'
+  ]
 
-  if (isBreakRunning) {
-    latestStatus.phase = 'breaking'
-    latestStatus.label = status.reference === 'finishMicrobreak' ? 'Mini break' : 'Long break'
-    latestStatus.remaining = status.timeLeft
-  } else if (isPaused) {
-    latestStatus.phase = 'paused'
-    latestStatus.label = 'Paused'
-    latestStatus.remaining = status.timeLeft || null
-  } else {
-    latestStatus.phase = 'waiting'
-    latestStatus.label = (status.reference === 'startBreak' || status.reference === 'startBreakNotification')
-      ? 'Long break'
-      : 'Mini break'
-    latestStatus.remaining = status.timeToNextBreak
+  for (const method of methods) {
+    const original = BreaksPlanner.prototype[method]
+    if (typeof original !== 'function') {
+      continue
+    }
+
+    BreaksPlanner.prototype[method] = function (...args) {
+      captureBreakPlanner(this)
+      const result = original.apply(this, args)
+      publishFloatingTimerData()
+      return result
+    }
   }
-
-  latestStatus.capturedAt = Date.now()
-  publishFloatingTimerData()
 }
 
 function patchTrayMenu () {
@@ -103,13 +94,10 @@ function injectFloatingTimerMenuItem (template) {
     return template
   }
 
-  const quitIndex = template.findIndex(item => item && item.role === 'quit')
-  if (quitIndex === -1) {
-    return template
-  }
-
   const nextTemplate = [...template]
-  const insertionIndex = Math.max(0, quitIndex - 1)
+  const quitIndex = nextTemplate.findIndex(item => item && item.role === 'quit')
+  const insertionIndex = quitIndex === -1 ? nextTemplate.length : Math.max(0, quitIndex - 1)
+
   nextTemplate.splice(insertionIndex, 0, {
     id: 'floating-timer-toggle',
     label: isFloatingTimerVisible() ? 'Hide Floating Timer' : 'Show Floating Timer',
@@ -120,6 +108,10 @@ function injectFloatingTimerMenuItem (template) {
 }
 
 function createFloatingTimerWindow () {
+  if (!isFloatingTimerVisible()) {
+    return
+  }
+
   if (floatingTimerWin && !floatingTimerWin.isDestroyed()) {
     return
   }
@@ -180,16 +172,48 @@ function destroyFloatingTimerWindow () {
 }
 
 function currentFloatingTimerData () {
-  let remaining = latestStatus.remaining
-  if (typeof remaining === 'number') {
-    remaining = Math.max(0, remaining - (Date.now() - latestStatus.capturedAt))
+  const planner = capturedBreakPlanner
+
+  if (!planner || !planner.scheduler) {
+    return {
+      phase: 'waiting',
+      label: 'Mini break',
+      time: '--:--',
+      remaining: null
+    }
+  }
+
+  const reference = planner.scheduler.reference
+  const isBreakRunning = reference === 'finishMicrobreak' || reference === 'finishBreak'
+  const isPaused = planner.isPaused ||
+    planner.dndManager?.isOnDnd ||
+    planner.naturalBreaksManager?.isSchedulerCleared ||
+    planner.appExclusionsManager?.isSchedulerCleared
+
+  if (isBreakRunning) {
+    return {
+      phase: 'breaking',
+      label: reference === 'finishMicrobreak' ? 'Mini break' : 'Long break',
+      time: formatRemainingTime(planner.scheduler.timeLeft),
+      remaining: planner.scheduler.timeLeft
+    }
+  }
+
+  if (isPaused) {
+    const remaining = planner.isPaused ? planner.scheduler.timeLeft : null
+    return {
+      phase: 'paused',
+      label: 'Paused',
+      time: formatRemainingTime(remaining),
+      remaining
+    }
   }
 
   return {
-    phase: latestStatus.phase,
-    label: latestStatus.label,
-    time: formatRemainingTime(remaining),
-    remaining
+    phase: 'waiting',
+    label: reference === 'startBreak' || reference === 'startBreakNotification' ? 'Long break' : 'Mini break',
+    time: formatRemainingTime(planner.timeToNextBreak),
+    remaining: planner.timeToNextBreak
   }
 }
 
@@ -227,10 +251,15 @@ function startFloatingTimerPublisher () {
     return
   }
 
-  publishInterval = setInterval(publishFloatingTimerData, 1000)
+  publishInterval = setInterval(() => {
+    if (isFloatingTimerVisible()) {
+      createFloatingTimerWindow()
+      publishFloatingTimerData()
+    }
+  }, 1000)
 }
 
-patchStatusMessages()
+patchBreaksPlanner()
 patchTrayMenu()
 
 ipcMain.on('hide-floating-timer', () => {
@@ -246,7 +275,7 @@ app.whenReady().then(() => {
   startFloatingTimerPublisher()
 })
 
-app.on('before-quit', () => {
+app.on('will-quit', () => {
   if (publishInterval) {
     clearInterval(publishInterval)
     publishInterval = null
