@@ -1,13 +1,18 @@
 # Floating timer implementation notes
 
-This branch adds a small always-on-top floating countdown window without changing Stretchly's existing break scheduling logic.
+This branch adds a small always-on-top floating countdown window without changing Stretchly's existing break scheduling decisions.
 
-The implementation intentionally routes startup through `app/floating-main.js`, then dynamically imports the original `app/main.js`. The wrapper patches `StatusMessages.prototype.trayMessage` to observe the existing planner state and injects a tray menu item through `Menu.buildFromTemplate`.
+The current implementation routes startup through `app/floating-main.js`, dynamically imports the original `app/main.js`, and captures the live `BreaksPlanner` instance by wrapping planner lifecycle methods before `main.js` creates the planner.
 
-This keeps the first prototype isolated:
+The floating timer now reads state directly from the planner instead of deriving state from tray tooltip text:
 
-- no changes to `app/main.js`
-- no scheduling changes
-- no strict-mode changes
-- no break/postpone/skip behavior changes
-- easy rollback by changing `package.json` back to `app/main.js`
+- scheduler reference and `scheduler.timeLeft`
+- `timeToNextBreak`
+- manual pause state
+- DND state
+- natural-break scheduler-cleared state
+- app-exclusion scheduler-cleared state
+
+The tray toggle is still injected at menu build time for this prototype, but it no longer depends on a `quit` item and is available even when the strict-mode tray menu is reduced.
+
+Known remaining architectural limitation: the ideal upstreamable version should move this code into `app/main.js` and Preferences instead of using a startup wrapper. This version is intended to make the feature behaviorally correct while keeping the existing main process file untouched for easy review.
